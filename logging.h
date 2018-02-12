@@ -1,8 +1,6 @@
 /*
 FILE: Logging.h
 PRIMARY AUTHOR: Sweet
-
-Copyright � 2017 DigiPen (USA) Corporation.
 */
 #pragma once
 
@@ -29,6 +27,9 @@ Copyright � 2017 DigiPen (USA) Corporation.
 
 #endif
 
+// The code side name for the logging thread
+//     this allows for logger::log << statement;
+#define LOGGER_VARIABLE_NAME log
 
 
 // assert
@@ -59,33 +60,40 @@ Copyright � 2017 DigiPen (USA) Corporation.
 #include <mutex>
 
 
-namespace Logger
+namespace logger
 {
 	class LoggerMainClass
 	{
 		private:
-			// The running state of this thread
-			//     false means exit
-			static bool mLogging;
+			// The thread the logger will run on
+			std::thread mLogMain;
 
 			// Mutex to protect the data when a thread needs to read/write
 			//     Prevents other threads from reading/writing
-			static std::mutex mVault;
+			std::mutex mVault;
+
+			// The running state of this thread
+			//     false means exit
+			bool mLogging = true;
+
+			// Will close the thread on the next pass
+			//     this will log anything in the buffers before closing
+			bool mClose = false;
 
 		private:
 			// "Public" write buffer
 			//    We call this public since other threads write to this buffer
-			static std::string mWriteBuffer;
+			std::string mWriteBuffer;
 
 			// Buffer of Text about to printed out
-			static std::string mReadBuffer;
+			std::string mReadBuffer;
 
 
 		#ifdef LOGGING_USE_FILE
-			static std::ofstream mLogFile;
+			std::ofstream mLogFile;
 
-			static std::string mWriteFileBuffer;
-			static std::string mReadFileBuffer;
+			std::string mWriteFileBuffer;
+			std::string mReadFileBuffer;
 		#endif
 
 		private:
@@ -94,15 +102,19 @@ namespace Logger
 
 		private:
 			// Internal Log that adds the message to the buffers
-			static void Log_Internal(const char *message);
+			void Log_Internal(const char *message);
 
 			// Class that handles the output operator
 			//     This is used so the timestamp isn't printed multiple times
 			class LoggerAppend
 			{
+				LoggerMainClass *mainLog = nullptr;
+
 				public:
+					LoggerAppend(LoggerMainClass *logger) : mainLog(logger) {}
+					
 					template <typename T>
-					LoggerReturn& operator <<(T& rhs)
+					LoggerAppend& operator <<(T& rhs)
 					{
 						// Use stringstream here as a "file"
 						//     It is a string that acts like a file
@@ -112,7 +124,7 @@ namespace Logger
 						ss << rhs;
 
 						// Pass the created string to the Log
-						Logger::Log_Internal(ss.str().c_str());
+						mainLog->Log_Internal(ss.str().c_str());
 
 						return *this;
 					}
@@ -134,16 +146,19 @@ namespace Logger
 				ss << std::put_time(std::localtime(&t), "[%d/%m/%Y][%H:%M]: ") << rhs;
 				
 				// Save the message in the buffer
-				Logger::Log_Internal(ss.str().c_str());
+				Log_Internal(ss.str().c_str());
 				
 				// Return a internal class so that the timestamp doesn't get printed
-				return LoggerAppend();
+				return LoggerAppend(this);
 			}
 
 
 		public:
 			// Sets up the other thread and starts the logging process
-			static int Init();
+			int Init();
+
+			// Tells the logger to shutdown, will log anything currently in buffers
+			void Exit();
 
 	};
 	
@@ -151,7 +166,7 @@ namespace Logger
 
 	// Global value that represents the main interface of logging
 	//     This is the "std::cout"
-	LoggerMainClass log;
+	extern LoggerMainClass LOGGER_VARIABLE_NAME;
 
 	// To Log:
 	//    swt::log << "Hello World: " << MyClassWithOverloads << "\n";
