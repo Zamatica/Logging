@@ -17,63 +17,79 @@ namespace logger
 
 		// Setup Logging Function, "Main" lambda function
 		mLogMain = std::thread([this]()
-			{
+		{
+            std::cout << "Initing Thread\n";
 
-				std::cout << "Initing Thread\n";
+            #ifdef LOGGING_USE_FILE
+                mLogFile.open(PATH_TO_FILE, std::ofstream::out | std::ofstream::app);
 
-				#ifdef LOGGING_USE_FILE
-					mLogFile.open(PATH_TO_FILE, std::ofstream::out | std::ofstream::app);
+                // Check if the file did not open
+                if (!mLogFile.is_open())
+                {
+                    #ifdef USE_ASSERT
+                        // Tell you asap in debug mode
+                        assert(!"File did not open.");
+                    #else
+                        throw LoggerMainClass::OpenFileFailure;
+                    #endif
 
-					// Check if the file did not open
-					if (!mLogFile.is_open())
-					{
-						// Tell you asap in debug mode
-						assert(!"File did not open.");
+                    // Printing out an error message
+                    std::cout << FILE_ERROR_CONSOLE_MSG;
 
-						// Printing out an error message
-						std::cout << FILE_ERROR_CONSOLE_MSG;
-					}
-				#endif
-				
-				// Check if we are still running
-				while (mLogging)
-				{
-					// Check if we read to write more to the screen
-					if (mWriteBuffer.size())
-					{
-						// Lock the Data so no one  can write, or wait for when you can have it
-						mVault.lock();
+                    return 0;
+                }
+            #endif
+            
+            // Check if we are still running
+            while (mLogging)
+            {
+                // Check if we read to write more to the screen
+                if (mWriteBuffer.size())
+                {
+                    // Lock the Data so no one  can write, or wait for when you can have it
+                    mVault.lock();
 
-						// Copy over the text into another buffer, so other threads avoid IO wait time from std::cout
-						mReadBuffer = mWriteBuffer;
+                    // Copy over the text into another buffer, so other threads avoid IO wait time from std::cout
+                    mReadBuffer = mWriteBuffer;
 
-						// Clear the write buffer so it doesn't show up again
-						mWriteBuffer.clear();
+                    // Clear the write buffer so it doesn't show up again
+                    mWriteBuffer.clear();
 
-						// Unlock so other threads can write into the logging.
-						mVault.unlock();
+                    // Unlock so other threads can write into the logging.
+                    mVault.unlock();
 
-						// IO Time! Print out the text to the screen.
-						std::cout << mReadBuffer;
+                    // IO Time! Print out the text to the screen.
+                    std::cout << mReadBuffer;
 
-				#ifdef LOGGING_USE_FILE
-						// Write to a file
-						mLogFile << mReadBuffer;
-				#endif
+                #ifdef LOGGING_USE_FILE
+                    // Write to a file
+                    mLogFile << mReadBuffer;
+                #endif
 
-						// Clear what was printed out to the screen, so it doesn't show up again
-						//    Similar to not clearing a frame buffer on a screen
-						mReadBuffer.clear();
+                    // Clear what was printed out to the screen, so it doesn't show up again
+                    //    Similar to not clearing a frame buffer on a screen
+                    mReadBuffer.clear();
 
-						if (mClose)
-						{
-							break;
-						}
-					}
-				std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_TIME));
-				}
-		});
+                    if (mClose)
+                    {
+                        break;
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_TIME));
+            }
 
+            if (mWriteBuffer.size()) {
+                        // IO Time! Print out the text to the screen.
+                    std::cout << mReadBuffer;
+
+                #ifdef LOGGING_USE_FILE
+                    // Write to a file
+                    mLogFile << mReadBuffer;
+                #endif
+            }
+
+            return 0;
+        });
 		return 0;
 	}
 

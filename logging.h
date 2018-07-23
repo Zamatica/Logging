@@ -10,7 +10,10 @@ PRIMARY AUTHOR: Sweet
 // Time the logging thread should wait for
 #define WAIT_TIME 8
 
-// Change this to ANYTHING else to disable file logging
+// How the timestamp should be printed out
+#define TIMESTAMP_STYLE "[%d/%m/%Y][%H:%M:%S]: "
+
+// Change this from LOGGING_USE_FILE else to disable file logging
 #define LOGGING_USE_FILE
 
 // Files are optional!
@@ -27,9 +30,14 @@ PRIMARY AUTHOR: Sweet
 
 #endif
 
+// Can assert when bad things happen or throw
+//     Change this  from USE_ASSERTS to throw
+#define USE_ASSERT
+
 // The code side name for the logging thread
 //     this allows for logger::log << statement;
 #define LOGGER_VARIABLE_NAME log
+
 
 
 // assert
@@ -92,12 +100,13 @@ namespace logger
 		#ifdef LOGGING_USE_FILE
 			std::ofstream mLogFile;
 
-			std::string mWriteFileBuffer;
-			std::string mReadFileBuffer;
+			// Here for future use to allow people to differ console and file outputs
+			//std::string mWriteFileBuffer;
+			//std::string mReadFileBuffer;
 		#endif
 
 		private:
-			// printf!
+			// logger::printf!
 			friend int printf(const char *fmt, ...);
 
 		private:
@@ -128,6 +137,32 @@ namespace logger
 
 						return *this;
 					}
+
+                    template <typename T>
+					LoggerAppend& operator <<(const T& rhs)
+					{
+						// Use stringstream here as a "file"
+						//     It is a string that acts like a file
+						std::stringstream ss;
+
+						// Write the rhs into the string
+						ss << rhs;
+
+						// Pass the created string to the Log
+						mainLog->Log_Internal(ss.str().c_str());
+
+						return *this;
+					}
+			};
+
+		private:
+			class OpenFileFailure
+			{
+				public:
+					void what()
+					{
+						std::cout << "Failed to open log file.\n";
+					}
 			};
 
 
@@ -143,7 +178,27 @@ namespace logger
 				std::time_t t = std::time(nullptr);
 
 				// Write the timestamp and the first part of the message
-				ss << std::put_time(std::localtime(&t), "[%d/%m/%Y][%H:%M]: ") << rhs;
+				ss << std::put_time(std::localtime(&t), TIMESTAMP_STYLE) << rhs;
+				
+				// Save the message in the buffer
+				Log_Internal(ss.str().c_str());
+				
+				// Return a internal class so that the timestamp doesn't get printed
+				return LoggerAppend(this);
+			}
+
+            template <typename T>
+			LoggerAppend operator <<(const T& rhs)
+			{
+				// Use stringstream here as a "file"
+				//     It is a string that acts like a file
+				std::stringstream ss;
+
+				// Get the current time
+				std::time_t t = std::time(nullptr);
+
+				// Write the timestamp and the first part of the message
+				ss << std::put_time(std::localtime(&t), TIMESTAMP_STYLE) << rhs;
 				
 				// Save the message in the buffer
 				Log_Internal(ss.str().c_str());
@@ -171,7 +226,7 @@ namespace logger
 	// To Log:
 	//    swt::log << "Hello World: " << MyClassWithOverloads << "\n";
 	//    swt::printf("%s", "Hello World\n");
-}
+};
 
 
 
